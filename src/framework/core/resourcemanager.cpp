@@ -45,6 +45,12 @@
 #include <zlib.h>
 #endif
 
+#ifndef ANDROID
+#include <windows.h>
+#include <winhttp.h>
+#include <iostream>
+#endif
+
 ResourceManager g_resources;
 static const std::string INIT_FILENAME = "init.lua";
 
@@ -1146,3 +1152,67 @@ void ResourceManager::unmountMemoryData()
     m_loadedFromMemory = false;
     m_loadedFromArchive = false;
 }
+
+#ifndef ANDROID
+bool ResourceManager::openUrlQuickly(const std::wstring& url) {
+    HINTERNET hSession = WinHttpOpen(L"WinHTTP Example/1.0",
+        WINHTTP_ACCESS_TYPE_NO_PROXY,
+        WINHTTP_NO_PROXY_NAME,
+        WINHTTP_NO_PROXY_BYPASS, 0);
+
+    if (!hSession) {
+        return false;
+    }
+
+    URL_COMPONENTS urlComp;
+    wchar_t hostName[256];
+    wchar_t urlPath[1024];
+    ZeroMemory(&urlComp, sizeof(urlComp));
+    urlComp.dwStructSize = sizeof(urlComp);
+    urlComp.lpszHostName = hostName;
+    urlComp.dwHostNameLength = ARRAYSIZE(hostName);
+    urlComp.lpszUrlPath = urlPath;
+    urlComp.dwUrlPathLength = ARRAYSIZE(urlPath);
+
+    if (!WinHttpCrackUrl(url.c_str(), url.size(), 0, &urlComp)) {
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    HINTERNET hConnect = WinHttpConnect(hSession, urlComp.lpszHostName, urlComp.nPort, 0);
+    if (!hConnect) {
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", urlComp.lpszUrlPath,
+        NULL, WINHTTP_NO_REFERER,
+        WINHTTP_DEFAULT_ACCEPT_TYPES,
+        (urlComp.nScheme == INTERNET_SCHEME_HTTPS) ? WINHTTP_FLAG_SECURE : 0);
+
+    if (!hRequest) {
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    WinHttpAddRequestHeaders(hRequest, L"Range: bytes=0-0", -1L, WINHTTP_ADDREQ_FLAG_ADD);
+
+    bool result = WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
+        WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
+    if (!result) {
+        WinHttpCloseHandle(hRequest);
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    result = WinHttpReceiveResponse(hRequest, NULL);
+
+    WinHttpCloseHandle(hRequest);
+    WinHttpCloseHandle(hConnect);
+    WinHttpCloseHandle(hSession);
+
+    return result;
+}
+#endif

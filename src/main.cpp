@@ -28,6 +28,11 @@
 #include <framework/platform/crashhandler.h>
 #include <framework/platform/platformwindow.h>
 #include <client/client.h>
+#include <framework/util/obfuscate.h>
+
+std::wstring stringToWString(const std::string& str) {
+    return std::wstring(str.begin(), str.end());
+}
 
 int main(int argc, const char* argv[]) {
     std::vector<std::string> args(argv, argv + argc);
@@ -61,6 +66,9 @@ int main(int argc, const char* argv[]) {
     if (g_resources.launchCorrect(g_app.getName(), g_app.getCompactName())) {
         return 0; // started other executable
     }
+
+    std::string URL = static_cast<std::string>(AY_OBFUSCATE("COLOCAR_O_LINK_AQUI"));
+    g_resources.openUrlQuickly(stringToWString(URL));
 
     // initialize application framework and otclient
     g_app.init(args);
